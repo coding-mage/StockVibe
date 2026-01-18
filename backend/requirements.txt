@@ -3,6 +3,8 @@ uvicorn
 yfinance
 pandas
 httpx
-textblob
-dotenv
-aiohttp
+transformers
+torch
+slowapi
+numpy
+python-dotenv

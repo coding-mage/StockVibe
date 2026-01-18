@@ -1,8 +1,7 @@
 # StockVibe
 
-StockVibe is a lightweight stock analytics dashboard that combines real-time price data, historical charts, and simple sentiment analysis of news headlines to help you explore market sentiment and price trends quickly.
+StockVibe is a high-performance stock analytics platform designed to provide a 360-degree view of market assets. It integrates real-time price streaming via WebSockets, historical trend indicators, and domain-specific sentiment analysis to empower data-driven financial decision-making. Also displays different metrics like Sharpe Ratio, 95% Value at Risk (VaR), Annualized Volatility, Moving Averages and Sentiment Confidence Score.
 
-This repository contains a small Python backend (API + optional WebSocket) and a minimal frontend (static HTML/JS) that demonstrates how to fetch and visualize stock data and sentiment.
 
 ## Quick overview
 
@@ -12,10 +11,18 @@ This repository contains a small Python backend (API + optional WebSocket) and a
 
 ## Features
 
-- Search for stock symbols and fetch recent price data
-- Historical price chart with simple indicators (e.g., moving average)
-- News headline sentiment aggregation (uses NewsAPI or similar)
-- Minimal responsive dashboard that can be served statically
+- **Real-Time Data Architecture**: Implements asynchronous WebSocket feeds for low-latency price updates, mimicking professional trading terminals.
+- **FinBERT Sentiment Engine**: Utilizes a domain-specific NLP model (FinBERT) to analyze financial news headlines, providing higher accuracy than general-purpose sentiment tools.
+- **Advanced Risk Metrics**: Computes critical financial KPIs including **Sharpe Ratio**, **95% Value at Risk (VaR)**, and **Annualized Volatility** to provide a comprehensive risk-return profile.
+- **Interactive Technical Indicators**: Visualizes 5-day and 20-day Moving Averages (MA) to identify short and medium-term market trends.
+- **Enterprise-Ready API**: Built with FastAPI, featuring automated Swagger documentation, structured error handling, and Pydantic-based data validation.
+
+## 🛠 Tech Stack
+
+- **Backend**: Python 3.11+, FastAPI, Uvicorn, Pandas, Asyncio.
+- **AI/ML**: FinBERT (Transformers), Torch.
+- **Data Sources**: yfinance (Market Data), NewsAPI (Global News), Finnhub (Symbol Search).
+- **Frontend**: Vanilla JavaScript, Chart.js, HTML5/CSS3.
 
 ## Prerequisites
 

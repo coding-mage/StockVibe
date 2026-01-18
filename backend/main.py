@@ -17,6 +17,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import dotenv 
 from textblob import TextBlob
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import torch
+import numpy as np
+
+# Initialize model and tokenizer (global)
+# FinBERT is pre-trained on financial phrasebanks for much higher accuracy
+tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 
 dotenv.load_dotenv()  # Load environment variables from .env file
 
@@ -73,36 +81,65 @@ async def get_news_sentiment(symbol: str, limit: int = 10):
             articles = data.get("articles", [])
             if not articles:
                 return {"symbol": symbol, "count": 0, "error": "No news found."}
+            
             headlines = [a["title"] for a in articles if a.get("title")]
-            sentiments = [TextBlob(h).sentiment.polarity for h in headlines]
-            avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
-            # Find most positive/negative headline
-            # for i,h in enumerate(headlines):
-            #     print(h)
-            #     print(sentiments[i])
-            #     print()
-            if sentiments:
-                max_idx = sentiments.index(max(sentiments))
-                min_idx = sentiments.index(min(sentiments))
-                most_positive = headlines[max_idx]
-                most_negative = headlines[min_idx]
-            else:
-                most_positive = most_negative = None
-            # Classify
-            if avg_sentiment > 0.1:
-                summary = "positive"
-            elif avg_sentiment < -0.1:
-                summary = "negative"
-            else:
-                summary = "neutral"
+            if not headlines:
+                return {"symbol": symbol, "count": 0, "error": "No news found."}
+
+            # FinBERT processing
+            inputs = tokenizer(headlines, padding=True, truncation=True, return_tensors="pt")
+            with torch.no_grad():
+                outputs = model(**inputs)
+                prediction = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            
+            # Calculate average probabilities across headlines
+            # FinBERT labels: 0 -> positive, 1 -> negative, 2 -> neutral
+            mean_probs = prediction.mean(dim=0)
+            sentiment_idx = torch.argmax(mean_probs).item()
+            labels = ["positive", "negative", "neutral"]
+            
             return {
                 "symbol": symbol,
                 "count": len(headlines),
-                "average_sentiment": avg_sentiment,
-                "summary": summary,
-                "most_positive": most_positive,
-                "most_negative": most_negative
+                "summary": labels[sentiment_idx],
+                "confidence": mean_probs[sentiment_idx].item(),
+                "sentiment_scores": {
+                    "positive": mean_probs[0].item(),
+                    "negative": mean_probs[1].item(),
+                    "neutral": mean_probs[2].item()
+                }
             }
+
+            # headlines = [a["title"] for a in articles if a.get("title")]
+            # sentiments = [TextBlob(h).sentiment.polarity for h in headlines]
+            # avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+            # # Find most positive/negative headline
+            # # for i,h in enumerate(headlines):
+            # #     print(h)
+            # #     print(sentiments[i])
+            # #     print()
+            # if sentiments:
+            #     max_idx = sentiments.index(max(sentiments))
+            #     min_idx = sentiments.index(min(sentiments))
+            #     most_positive = headlines[max_idx]
+            #     most_negative = headlines[min_idx]
+            # else:
+            #     most_positive = most_negative = None
+            # # Classify
+            # if avg_sentiment > 0.1:
+            #     summary = "positive"
+            # elif avg_sentiment < -0.1:
+            #     summary = "negative"
+            # else:
+            #     summary = "neutral"
+            # return {
+            #     "symbol": symbol,
+            #     "count": len(headlines),
+            #     "average_sentiment": avg_sentiment,
+            #     "summary": summary,
+            #     "most_positive": most_positive,
+            #     "most_negative": most_negative
+            # }
     except Exception as e:
         return {"symbol": symbol, "error": str(e)}
 
@@ -158,6 +195,19 @@ def compute_analytics_sync(symbol: str, period_days: int = 60) -> Dict[str, Any]
     ma_long = float(close.rolling(window=20).mean().iloc[-1]) if len(close) >= 20 else None
 
     returns = close.pct_change().dropna()
+
+
+    # 1. Sharpe Ratio (Annualized)
+    # Assuming 2% risk-free rate for consultancy demo
+    risk_free_rate = 0.02 
+    mean_return = returns.mean() * 252
+    ann_std = returns.std() * np.sqrt(252)
+    sharpe_ratio = (mean_return - risk_free_rate) / ann_std if ann_std != 0 else 0
+
+    # 2. Value at Risk (VaR) - 95% Confidence
+    # Represents the potential loss not exceeded with 95% certainty
+    var_95 = np.percentile(returns, 5)
+
     volatility = float(returns.std() * (252 ** 0.5)) if not returns.empty else None  # annualized
 
     percent_change = ((last_price - first_price) / first_price) * 100 if first_price != 0 else None
@@ -171,6 +221,8 @@ def compute_analytics_sync(symbol: str, period_days: int = 60) -> Dict[str, Any]
         "ma_short": round(ma_short, 4) if ma_short is not None else None,
         "ma_long": round(ma_long, 4) if ma_long is not None else None,
         "volatility_annualized": round(volatility, 6) if volatility is not None else None,
+        "sharpe_ratio": round(sharpe_ratio, 4),
+        "value_at_risk_95": round(var_95, 4),
         "percent_change_period": round(percent_change, 4) if percent_change is not None else None,
         "history": {
             "labels": labels,
